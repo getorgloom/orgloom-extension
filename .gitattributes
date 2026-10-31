@@ -1,0 +1,3 @@
+# The pinned runtime manifest hashes exact bytes on every platform.
+vendor/upstream/** -text
+LICENSE -text

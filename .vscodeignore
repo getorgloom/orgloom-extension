@@ -1,0 +1,11 @@
+.git/**
+.vscode/**
+.vscode-test/**
+node_modules/**
+tests/**
+test-results/**
+scripts/**
+vendor/upstream/packages/canvas/src/**
+*.vsix
+*.log
+package-lock.json

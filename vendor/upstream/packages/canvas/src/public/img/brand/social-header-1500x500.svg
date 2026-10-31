@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500">
+
+  <rect width="1500" height="500" fill="#181b20"/>
+
+  <g stroke="#2a2e36" stroke-width="1" opacity="0.45">
+    <line x1="0" y1="100" x2="1500" y2="100"/>
+    <line x1="0" y1="150" x2="1500" y2="150"/>
+    <line x1="0" y1="200" x2="1500" y2="200"/>
+    <line x1="0" y1="250" x2="1500" y2="250"/>
+    <line x1="0" y1="300" x2="1500" y2="300"/>
+    <line x1="0" y1="350" x2="1500" y2="350"/>
+    <line x1="0" y1="400" x2="1500" y2="400"/>
+  </g>
+
+  <text x="750" y="230" font-family="Segoe UI Black, Arial Black, sans-serif" font-weight="900" font-size="140" fill="#ede8dd" text-anchor="middle" letter-spacing="-2">ORG LOOM</text>
+
+  <rect x="660" y="260" width="180" height="5" fill="#e09240"/>
+
+  <text x="750" y="330" font-family="Segoe UI, Arial, sans-serif" font-weight="400" font-size="40" fill="#cfccc3" text-anchor="middle">A canvas for Salesforce data.</text>
+</svg>

@@ -1,0 +1,159 @@
+<%# Main canvas shell; server-rendered flags establish the authenticated client boundary. %>
+<% var __needsSfConnect = (typeof needsSfConnect !== 'undefined') && !!needsSfConnect; %>
+<% var __sfConnected = !!user && !__needsSfConnect; %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Org Loom</title>
+	<link rel="stylesheet" href="/css/app.css?v=playground-small-screen-1">
+</head>
+<body class="canvas-page">
+	<%- include('partials/top-strip') %>
+
+	<% if (typeof playgroundMode !== 'undefined' && playgroundMode) { %>
+		<div class="app-playground-banner" role="status">
+			<a class="app-playground-banner-home" href="/">&larr; Back to home</a>
+			<span class="app-playground-banner-content">
+				<strong>Demo mode</strong> &middot; fictional sample data stays in your browser; no real org is connected.
+			</span>
+			<span class="app-playground-small-screen">
+				<strong>Best on a desktop or laptop.</strong> The canvas has limited support on small screens. <a href="/#demo-video">Watch the demo</a>
+			</span>
+		</div>
+	<% } %>
+
+	<main class="app-main">
+		<% if (user) { %>
+
+			<% if (typeof upgrade !== 'undefined' && upgrade === 'pending') { %>
+			<div id="upgrade-banner" role="status" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--warn,#d29a00);color:#1a1a1a;padding:0.6em 2.5em 0.6em 1em;font-size:0.9em;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.25)"><strong>Payment processing.</strong> We&rsquo;ll upgrade your workspace once your bank confirms (usually 3&ndash;5 business days). You can connect Salesforce and start using Org Loom on your current plan in the meantime.<button type="button" id="upgrade-banner-x" aria-label="Dismiss" style="position:absolute;right:0.5em;top:50%;transform:translateY(-50%);background:none;border:0;color:inherit;font-size:1.1em;cursor:pointer;line-height:1;padding:0.25em 0.5em">&times;</button></div>
+			<script nonce="<%= cspNonce %>">
+			(function () {
+				var bar = document.getElementById('upgrade-banner');
+				if (!bar) return;
+				var dismiss = function () { if (bar.parentNode) bar.parentNode.removeChild(bar); };
+				var x = document.getElementById('upgrade-banner-x');
+				if (x) x.addEventListener('click', dismiss);
+				setTimeout(dismiss, 12000);
+			})();
+			</script>
+			<% } %>
+
+			<div id="app-root"></div>
+
+			<script src="/vendor/cytoscape/dist/cytoscape.umd.js" defer></script>
+			<script src="/vendor/cytoscape-node-html-label/dist/cytoscape-node-html-label.min.js" defer></script>
+			<script nonce="<%= cspNonce %>">
+				window.SF_ORG_ID = <%- jsonForScript(user && user.organizationId ? user.organizationId : null) %>;
+				window.SF_USER_ID = <%- jsonForScript(user && user.sfUserId ? user.sfUserId : null) %>;
+				window.SF_USER_NAME = <%- jsonForScript(user && (user.displayName || user.username) ? (user.displayName || user.username) : null) %>;
+				window.SF_USER_TIME_ZONE = <%- jsonForScript(typeof sfTimeZone !== 'undefined' ? sfTimeZone : null) %>;
+				window.SF_INSTANCE_URL = <%- jsonForScript(typeof instanceUrl !== 'undefined' ? instanceUrl : null) %>;
+				window.ORGLOOM_ACCOUNT_ID = <%- jsonForScript(user && user.id ? user.id : null) %>;
+				window.ORGLOOM_SF_CONNECTED = <%- jsonForScript(!!__sfConnected) %>;
+				window.ORGLOOM_HAS_DOCS = <%- jsonForScript(typeof saasEnabled !== 'undefined' && !!saasEnabled) %>;
+				window.ORGLOOM_CANVAS_PATH = <%- jsonForScript((typeof saasEnabled !== 'undefined' && saasEnabled) ? '/canvas' : '/') %>;
+				window.ORGLOOM_MOCK = <%- jsonForScript(typeof playgroundMode !== 'undefined' && !!playgroundMode) %>;
+				window.ORGLOOM_MCP_ACTIVE = <%- jsonForScript(!(typeof saasEnabled !== 'undefined' && saasEnabled)) %>;
+				window.ORGLOOM_SENTRY_DSN = <%- jsonForScript(typeof sentryDsn !== 'undefined' ? sentryDsn : null) %>;
+				window.ORGLOOM_ACCOUNT_ID_HASH = <%- jsonForScript(typeof accountIdHash !== 'undefined' ? accountIdHash : null) %>;
+				window.ORGLOOM_ENV = <%- jsonForScript(typeof appEnv !== 'undefined' ? appEnv : 'production') %>;
+				window.ORGLOOM_RELEASE = <%- jsonForScript(typeof appRelease !== 'undefined' ? appRelease : null) %>;
+				if (window.posthog && window.posthog.capture) {
+					window.posthog.capture('canvas_opened', {
+						sf_connected: !!window.ORGLOOM_SF_CONNECTED,
+					});
+				}
+			</script>
+			<script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" integrity="sha384-ek46VuBjLOrzW6vcL5CcxRrAtcxp4l7tJqnBOW3s7SIYy7qrKN+IzGFT7g1puodV" crossorigin="anonymous"></script>
+			<script type="module" src="/js/sentry-init.js"></script>
+			<script src="/js/canvas-capture.js"></script>
+			<% if (typeof playgroundMode !== 'undefined' && playgroundMode) { %>
+				<script src="/js/mock-data.js"></script>
+				<script src="/js/mock-sf.js"></script>
+			<% } %>
+			<script src="/js/playground-bridge.js"></script>
+			<script src="/js/sf-fetch.js"></script>
+			<script src="/js/formula.js" defer></script>
+			<script src="/js/import-shared.js" defer></script>
+			<script src="/js/value-compare.js" defer></script>
+			<script src="/js/encrypted-fields.js?v=1" defer></script>
+			<script src="/js/datetime.js" defer></script>
+			<script src="/js/migrate-annotate.js" defer></script>
+			<script src="/js/migrate-match.js" defer></script>
+			<script src="/js/record-diff-modal.js" defer></script>
+			<script src="/js/find-duplicates-modal.js" defer></script>
+			<script src="/js/ai-generate.js" defer></script>
+			<script src="/js/bulk-script.js" defer></script>
+			<script src="/js/upload-history.js" defer></script>
+			<script src="/js/support-modals.js" defer></script>
+			<script src="/js/csv-import.js" defer></script>
+			<script src="/js/linked-csv.js?v=2" defer></script>
+			<script src="/js/soql-import.js" defer></script>
+			<script src="/js/record-browse.js" defer></script>
+			<script src="/js/templates.js?v=2" defer></script>
+			<script src="/js/recovery-storage.js?v=1" defer></script>
+			<script src="/js/session-drafts.js?v=3" defer></script>
+			<script src="/js/presence.js?v=3" defer></script>
+			<script src="/js/ai-proposals.js" defer></script>
+			<script src="/js/ai-clarifications.js" defer></script>
+			<script src="/js/bulk-edit-modal.js" defer></script>
+			<script src="/js/insert-modal.js?v=22" defer></script>
+			<script src="/js/related-counts.js" defer></script>
+			<script src="/js/find-object-popover.js" defer></script>
+			<script src="/js/preflight.js" defer></script>
+			<script src="/js/schema-graph.js" defer></script>
+			<script src="/js/schema-builder.js" defer></script>
+			<script src="/js/records-canvas.js" defer></script>
+			<script src="/js/related-records.js" defer></script>
+			<script src="/js/type-node.js" defer></script>
+			<script src="/js/pending-spawn.js" defer></script>
+			<script src="/js/cy-interactions.js" defer></script>
+			<script src="/js/canvas-autosave.js?v=3" defer></script>
+			<script src="/js/canvas-save-state.js" defer></script>
+			<script src="/js/canvas-marquee.js" defer></script>
+			<script src="/js/canvas-associations.js" defer></script>
+			<script src="/js/canvas-card-menu.js" defer></script>
+			<script src="/js/canvas-save-load.js" defer></script>
+			<script src="/js/canvas-share.js" defer></script>
+			<script src="/js/slot-user.js" defer></script>
+			<script src="/js/shared-task-sidebar.js" defer></script>
+			<script src="/js/ui-feedback.js" defer></script>
+			<script src="/js/bulk-ops-menu.js" defer></script>
+			<script src="/js/bulk-autofill.js" defer></script>
+			<script src="/js/canvas-cap.js" defer></script>
+			<script src="/js/stale-ref.js?v=2" defer></script>
+			<script src="/js/canvas-search.js" defer></script>
+			<script src="/js/canvas-export-csv.js" defer></script>
+			<script src="/js/anchored-popup.js" defer></script>
+			<script src="/js/bulk-toolbar.js" defer></script>
+			<script src="/js/tree-layout.js" defer></script>
+			<script src="/js/upload-fixes-sidebar.js" defer></script>
+			<script src="/js/upload-modal.js?v=3" defer></script>
+			<script src="/js/support.js"></script>
+			<script src="/js/app.js" defer></script>
+			<script src="/js/mcp-relay-client.js" defer></script>
+		<% } else { %>
+			<% var __ts_saas = (typeof saasEnabled !== 'undefined') ? !!saasEnabled : false; %>
+			<section class="signin-gate">
+				<% if (__ts_saas) { %>
+					<a class="button signin-gate-btn" href="/sign-in">Sign in</a>
+				<% } else { %>
+					<a class="button signin-gate-btn" href="/auth/login">Connect Salesforce to get started</a>
+					<p class="signin-gate-existing">
+						Org Loom Canvas runs entirely on your local machine. Connect a Salesforce org once and the canvas opens.
+					</p>
+					<div class="video-embed video-embed--placeholder video-embed--aspect-16-9" role="img" aria-label="Demo video placeholder">
+						<div class="video-embed-empty">
+							<span class="video-embed-empty-icon" aria-hidden="true">▶</span>
+							<span class="video-embed-empty-text">Demo video coming soon</span>
+						</div>
+					</div>
+				<% } %>
+			</section>
+		<% } %>
+	</main>
+</body>
+</html>

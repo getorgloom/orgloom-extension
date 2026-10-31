@@ -1,0 +1,10 @@
+node_modules/
+media/
+.vscode-test/
+test-results/
+*.vsix
+.env*
+*.log
+.sf/
+.sfdx/
+outputs/

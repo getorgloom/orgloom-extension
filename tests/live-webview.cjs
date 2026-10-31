@@ -1,0 +1,90 @@
+'use strict';
+const vscode = require('vscode');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const fs = require('node:fs');
+exports.run = async ({ workbench, until, output }) => {
+  const root = vscode.extensions.getExtension('orgloom.orgloom-vscode').extensionPath;
+  const { LiveApi } = require(path.join(root,'src/live-api.cjs'));
+  const { SalesforceError } = require(path.join(root,'src/salesforce.cjs'));
+  const { renderHtml } = require(path.join(root,'src/html.cjs'));
+  const identity = { orgId:'00D000000000001AAA',userId:'005000000000001AAA',orgName:'Controlled transport fixture',displayName:'Test User',timeZone:'UTC',instanceUrl:'https://fixture.my.salesforce.com' };
+  const record={Id:'001000000000001AAA',Name:'Desktop test record',Phone:'555-0100',LastModifiedDate:'2026-10-21T12:00:00.000+0000'};
+  const fields=[{name:'Id',label:'Record ID',type:'id',updateable:false,createable:false,nillable:false,filterable:true},{name:'Name',label:'Account Name',type:'string',nameField:true,updateable:true,createable:true,nillable:false,length:255,sortable:true,filterable:true},{name:'Phone',label:'Phone',type:'phone',updateable:true,createable:true,nillable:true,length:40},{name:'LastModifiedDate',label:'Last modified',type:'datetime',updateable:false,createable:false,nillable:false}];
+  const metadata={name:'Account',label:'Account',labelPlural:'Accounts',keyPrefix:'001',queryable:true,updateable:true,createable:true,deletable:true,fields,recordTypeInfos:[],childRelationships:[{childSObject:'Contact',field:'AccountId',relationshipName:'Contacts'}]};
+  const contact={Id:'003000000000001AAA',Name:'Related contact',AccountId:record.Id,LastModifiedDate:record.LastModifiedDate};
+  const contactMetadata={...metadata,name:'Contact',label:'Contact',labelPlural:'Contacts',keyPrefix:'003',childRelationships:[],fields:[...fields,{name:'AccountId',label:'Account',type:'reference',filterable:true,referenceTo:['Account'],updateable:true}]};
+  const calls=[];let approvals=0;const map=new Map();
+  const api=new LiveApi({publicIdentity:()=>identity,request:async(route,options={})=>{
+    calls.push({route,method:options.method||'GET'});
+    if(route.includes('/ui-api/'))throw new SalesforceError('Unsupported UI API','unsupported',404);
+    if(route.endsWith('/sobjects/'))return {sobjects:[metadata,contactMetadata]};
+    if(route.endsWith('/describe'))return route.includes('/Contact/')?contactMetadata:metadata;
+    if(route.includes('UserRecordAccess'))return {records:[{RecordId:record.Id,HasReadAccess:true,HasEditAccess:true,HasDeleteAccess:false}]};
+    if(route.includes('/query?'))return {records:decodeURIComponent(route).includes('COUNT()')?[]:[{...(decodeURIComponent(route).includes('FROM Contact')?contact:record)}],totalSize:1,done:true};
+    if(options.method==='PATCH'){Object.assign(record,options.body);return null;}
+    if(route.includes('/sobjects/Account/'))return {...record};
+    if(route.includes('/sobjects/Contact/'))return {...contact};
+    if(route.endsWith('/limits'))return {};
+    throw new Error('Unexpected fixture route');
+  }},{confirmUpload:async()=>{approvals++;return true;},secrets:{get:async k=>map.get(k),store:async(k,v)=>map.set(k,v),delete:async k=>map.delete(k)}});
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  const panel=vscode.window.createWebviewPanel('orgloom.testFixture','Org Loom · Adapter Test',vscode.ViewColumn.One,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(path.join(root,'media'))]});
+  panel.webview.onDidReceiveMessage(async msg=>{if(msg?.type==='live-api')await panel.webview.postMessage({type:'live-api-result',id:msg.id,...await api.handle(msg)});});
+  panel.webview.html=renderHtml({root,identity,resource:p=>panel.webview.asWebviewUri(vscode.Uri.file(path.join(root,'media',p))).toString(),cspSource:panel.webview.cspSource});
+  try {
+    const canvas=await until(async()=>{for(const f of workbench.frames())if(await f.locator('#prototype-disconnect').count().catch(()=>0))return f;},'connected adapter webview');
+    await canvas.locator('[data-bulk-add-menu]').waitFor({state:'visible'});
+    await vscode.commands.executeCommand('notifications.hideToasts');
+    const boundary=await canvas.evaluate(async()=>{
+      let denied=false;try{await fetch('https://orgloom.com/no-network');}catch{denied=true;}
+      return {denied,mock:window.ORGLOOM_MOCK,sample:!!window.OrgLoomMock,csp:document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content,storage:localStorage instanceof Storage};
+    });
+    assert.equal(boundary.denied,true);assert.equal(boundary.mock,false);assert.equal(boundary.sample,false);assert.equal(boundary.storage,false);assert.match(boundary.csp,/connect-src 'none'/);
+    await canvas.locator('[data-bulk-add-menu]').click();
+    await canvas.locator('[data-add-menu="browse"]').click();
+    await canvas.locator('.rb-object-picker').selectOption('Account');
+    await until(async()=>(await canvas.locator('.rb-count').innerText()).includes('1 record matches') || (await canvas.locator('.rb-count').innerText()).includes('1 record match'),'Browse record count');
+    await canvas.locator('[data-rb-add-filter]').click();
+    await canvas.locator('.rb-filter-field').selectOption('Name');
+    await canvas.locator('.rb-filter-op').selectOption('isNotNull');
+    await until(()=>calls.some(c=>decodeURIComponent(c.route).includes('Name != null')),'Browse typed filter sent to Salesforce');
+    await canvas.locator('[data-rb-row-checkbox]').first().check();
+    await workbench.screenshot({path:path.join(output,'08-browse-filter.png')});
+    await canvas.locator('.rb-load-btn').click();
+    await canvas.locator('[data-rec-id]').first().waitFor({state:'visible'});
+    await canvas.locator('[data-bulk-add-menu]').click();
+    await canvas.locator('[data-add-menu="soql"]').click();
+    await canvas.locator('#soql-query').fill('SELECT Id, Name FROM Account LIMIT 1');
+    await canvas.locator('#soql-preview-btn').click();
+    await until(async()=>(await canvas.locator('.soql-preview-tablewrap').innerText()).includes('Desktop test record'),'SOQL preview');
+    await canvas.locator('#soql-commit-btn').click();
+    await until(async()=>(await canvas.locator('.soql-import-modal').innerText()).includes('already on the canvas'),'SOQL duplicate handling');
+    assert.equal(await canvas.locator('[data-rec-id]').count(),1);
+    await canvas.locator('.soql-import-modal button[data-soql-close]').last().click();
+    const card=canvas.locator('[data-rec-id]').first();
+    await card.waitFor({state:'visible'});
+    await canvas.locator('#prototype-fit').click();
+    await new Promise(r=>setTimeout(r,250));
+    await card.locator('[data-related-pick]').click();
+    await canvas.locator('[data-rel-object="Contact"][data-rel-field="AccountId"]').click();
+    await until(async()=>(await canvas.locator('[data-rec-id]').allTextContents()).some(t=>t.includes('Related contact')),'Find related loads child record');
+    assert.ok(calls.some(c=>decodeURIComponent(c.route).includes('FROM Contact WHERE AccountId =')));
+    assert.ok(api.baselines.has('Contact:'+contact.Id));
+    await canvas.locator('#prototype-fit').click();
+    await new Promise(r=>setTimeout(r,250));
+    const box=await card.boundingBox();
+    await workbench.mouse.dblclick(box.x+box.width/2,box.y+24);
+    await canvas.locator('[data-editor-element="insert-form"]').waitFor({state:'visible'});
+    await canvas.locator('[id$="f_Name"]').fill('Updated through desktop adapter');
+    await canvas.locator('[data-editor-element="modal-submit"]').click();
+    await until(async()=>(await card.innerText()).includes('Updated through desktop adapter'),'connected record edit');
+    await canvas.locator('[data-bulk-upload]').click();
+    await canvas.getByRole('button',{name:/^Upload \d|^Upload$|^Confirm upload$/}).last().click();
+    await until(()=>record.Name==='Updated through desktop adapter','confirmed adapter write');
+    assert.equal(approvals,1);assert.equal(calls.filter(c=>c.method==='PATCH').length,1);
+    await workbench.screenshot({path:path.join(output,'04-connected-adapter.png')});
+    fs.writeFileSync(path.join(output,'connected-adapter-report.json'),JSON.stringify({mode:'controlled transport fixture, not live Salesforce',passed:['Live bootstrap excludes fictional mock adapter','CSP and memory-only storage boundaries','Browse field filter, selection and import through real UI','SOQL preview and duplicate-safe import through extension API bridge','Find related loads Contact from Account through real canvas UI','Related record baseline retained','Real editor field update','Upload through validated adapter and confirmation callback'],calls},null,2));
+  } catch(error){await workbench.screenshot({path:path.join(output,'connected-failure.png')});fs.writeFileSync(path.join(output,'connected-failure.txt'),(await Promise.all(workbench.frames().map(f=>f.locator('body').innerText().catch(()=>'')))).join('\n'));throw error;}
+  finally {api.dispose();panel.dispose();}
+};

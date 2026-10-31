@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2160" height="256" viewBox="0 0 1080 128">
+  <title>Org Loom — A canvas for Salesforce data.</title>
+  <rect width="1080" height="128" fill="#181b20"/>
+  <g stroke="#2a2e36" stroke-width="0.5" opacity="0.45">
+    <path d="M0 24H1080 M0 44H1080 M0 64H1080 M0 84H1080 M0 104H1080"/>
+  </g>
+  <text x="540" y="57" font-family="Segoe UI Black, Arial Black, sans-serif" font-weight="900" font-size="38" fill="#ede8dd" text-anchor="middle" letter-spacing="-0.5">ORG LOOM</text>
+  <rect x="512" y="68" width="56" height="2" fill="#e09240"/>
+  <text x="540" y="94" font-family="Segoe UI, Arial, sans-serif" font-weight="400" font-size="18" fill="#cfccc3" text-anchor="middle">A canvas for Salesforce data.</text>
+</svg>

@@ -1,0 +1,84 @@
+{
+  "name": "orgloom-vscode",
+  "displayName": "Org Loom",
+  "description": "A local Salesforce record canvas with direct APIs, migration, encrypted recovery and scripts. No managed package required.",
+  "version": "0.9.41",
+  "publisher": "GreyloopCodingLLC",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./src/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished",
+    "onWebviewPanel:orgloom.testCanvas"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Org Loom",
+      "properties": {
+        "orgloom.localRecovery.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Save encrypted canvas recovery copies on this computer. Keys are stored in VS Code SecretStorage. Disabling this deletes existing recovery copies and keys for all Org Loom connections on this computer without closing your current canvas."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "orgloom.connectCliOrg",
+        "title": "Org Loom: Connect with Salesforce CLI"
+      },
+      {
+        "command": "orgloom.openTestCanvas",
+        "title": "Org Loom: Open Salesforce Canvas"
+      },
+      {
+        "command": "orgloom.disconnectTestOrg",
+        "title": "Org Loom: Disconnect Salesforce Org"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "test": "node --test tests/unit.test.cjs tests/salesforce.test.cjs tests/salesforce-cli.test.cjs tests/live-api.test.cjs tests/metadata.test.cjs tests/related.test.cjs tests/uploads.test.cjs tests/upload-retry.test.cjs tests/upserts.test.cjs tests/record-reads.test.cjs tests/files.test.cjs tests/desktop-services.test.cjs tests/migration.test.cjs tests/migration-lifecycle.test.cjs tests/migration-ui.test.cjs tests/parity.test.cjs tests/recovery-hardening.test.cjs tests/recovery-preference.test.cjs tests/parity-hardening.test.cjs tests/live-lifecycle.test.cjs tests/bulk-delete-menu.test.cjs tests/preflight-cycles.test.cjs tests/security-adversarial-host.test.cjs tests/script-editor.test.cjs",
+    "test:extension": "node tests/run-extension.cjs",
+    "preview": "node scripts/preview.cjs",
+    "package": "npm run build && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build",
+    "test:security": "node --test tests/security-adversarial-host.test.cjs tests/security-adversarial-browser.test.cjs tests/unit.test.cjs tests/salesforce.test.cjs tests/salesforce-cli.test.cjs tests/files.test.cjs tests/desktop-services.test.cjs tests/recovery-hardening.test.cjs tests/recovery-preference.test.cjs tests/live-lifecycle.test.cjs"
+  },
+  "dependencies": {
+    "cytoscape": "3.33.2",
+    "cytoscape-node-html-label": "1.2.2"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.59.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/j-orgloom/orgloom-extension.git"
+  },
+  "icon": "images/icon.png",
+  "homepage": "https://orgloom.com",
+  "bugs": {
+    "url": "https://github.com/j-orgloom/orgloom-extension/issues"
+  }
+}
