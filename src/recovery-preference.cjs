@@ -32,7 +32,7 @@ class RecoveryPreference {
     await this.context.globalState.update(PROMPTED, true);
     const choice = await this.vscode.window.showInformationMessage('Enable local canvas recovery?', {
       modal: true,
-      detail: 'Save an encrypted copy of your canvas on this computer so you can restore your work after a restart or crash. You can change this later in Settings: Org Loom › Local Recovery: Enabled.',
+      detail: 'Save encrypted canvas copies on this computer so you can resume your work after a restart or crash. You can change this later in Settings: Org Loom › Local Recovery: Enabled.',
     }, 'Enable recovery', 'Not now');
     // A dismissal also leaves recovery off without prompting again.
     if (choice !== 'Enable recovery') return;

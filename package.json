@@ -2,7 +2,7 @@
   "name": "orgloom-vscode",
   "displayName": "Org Loom",
   "description": "A local Salesforce record canvas with direct APIs, migration, encrypted recovery and scripts. No managed package required.",
-  "version": "0.9.41",
+  "version": "0.9.44",
   "publisher": "GreyloopCodingLLC",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",

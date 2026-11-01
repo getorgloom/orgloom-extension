@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.44
+
+- Updated the README platform table. No runtime changes.
+
+## 0.9.43
+
+- Released the current extension as a stable Marketplace build, without the pre-release flag. Includes opt-in encrypted recovery and minimized upload tracking.
+
+## 0.9.42
+
+- Repackaged the current extension for installation, including opt-in encrypted recovery and minimized upload tracking from 0.9.40–0.9.41. No additional runtime changes.
+
 ## 0.9.41
 
 - Removed submitted field values from pending upload tracking; retained identifiers, request hashes, operation types, and outcome tracking.
