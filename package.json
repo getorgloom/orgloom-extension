@@ -1,8 +1,8 @@
 {
   "name": "orgloom-vscode",
   "displayName": "Org Loom",
-  "description": "A local Salesforce record canvas with direct APIs, migration, encrypted recovery and scripts. No managed package required.",
-  "version": "0.9.44",
+  "description": "A canvas for Salesforce records in VS Code. Explore, edit, create, and share records in one workspace. Prepare changes, collaborate with teammates, and upload when you’re ready.",
+  "version": "0.9.45",
   "publisher": "GreyloopCodingLLC",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",

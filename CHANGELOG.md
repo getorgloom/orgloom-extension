@@ -1,8 +1,13 @@
 # Changelog
 
+## 0.9.45
+
+- Updated the extension's Marketplace description.
+
 ## 0.9.44
 
-- Updated the README platform table. No runtime changes.
+- Updated the README introduction, features, installation options, and documentation links.
+- Clarified the local recovery prompt to describe encrypted canvas copies and resuming work after a restart or crash.
 
 ## 0.9.43
 
