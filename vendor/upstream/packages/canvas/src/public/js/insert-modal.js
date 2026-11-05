@@ -2720,16 +2720,7 @@
 								currentFormValues = Object.assign({}, initialValues || {});
 								renderForm('');
 								wireLiveValidation();
-								const submitBtn = _syncSubmitButtonAccess();
-								if (
-									!submitBtn.hidden &&
-									canvasState.currentRecordRef &&
-									canvasState.currentRecordRef._recipientSlot &&
-									_slotAssignmentState(canvasState.currentRecordRef) === 'other'
-								) {
-									submitBtn.disabled = true;
-									submitBtn.title = 'Reserved for the assigned teammate; read-only for you.';
-								}
+								_syncSubmitButtonAccess();
 								if (initialValues && Object.keys(initialValues).length > 0) {
 									populateForm(initialValues);
 									refreshEditorValidation();
@@ -3033,9 +3024,13 @@
 					canvasState.currentRecordRef &&
 					canvasState.currentRecordRef.loadedFromId
 				) {
-					const accessNotice = !recipientCanEdit
+					const accessNotice = !sharedRecordEditAccess(
+						shareRole,
+						canvasState.currentRecordRef,
+						_slotAssignmentState(canvasState.currentRecordRef),
+					)
 						? 'Read-only on this shared canvas.'
-						: shareRole === 'contributor'
+						: recipientCanEdit && shareRole === 'contributor'
 							? 'Your changes will be submitted to the canvas owner for review.'
 							: '';
 					if (accessNotice) {

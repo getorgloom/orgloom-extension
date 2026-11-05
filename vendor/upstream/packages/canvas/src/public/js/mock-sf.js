@@ -509,7 +509,7 @@
 			'export-canvas': true,
 			'receive-canvas': true,
 			'filter-orgs': true,
-			'generate-records-with-ai': true,
+			'generate-records-with-ai': false,
 			'ai-edit-on-canvas': true,
 		};
 	}
@@ -781,7 +781,7 @@
 
 	function handleAiStatus() {
 		return jsonResponse({
-			enabled: true,
+			enabled: false,
 			model: 'mock',
 			usage: null,
 			planLabel: 'Demo',
@@ -1255,72 +1255,6 @@
 		return jsonResponse({ ok: true });
 	}
 
-	async function handleAiPlan(req) {
-		const body = await req.json().catch(() => ({}));
-		const objectCounts = body.recordCounts || body.objectCounts || {};
-		const tempCounter = { n: 1 };
-		const records = [];
-		const associations = [];
-		const objectsList = Object.keys(objectCounts);
-		const tempIdsByObject = {};
-
-		for (const objectName of objectsList) {
-			const count = Math.max(0, Math.min(50, parseInt(objectCounts[objectName], 10) || 0));
-			const templates = MOCK.records[objectName] || [];
-			tempIdsByObject[objectName] = [];
-			for (let i = 0; i < count; i++) {
-				const template = templates[(i + Math.floor(Math.random() * templates.length)) % templates.length];
-				if (!template) {
-					continue;
-				}
-				const tempId = tempCounter.n++;
-				const values = {};
-				Object.keys(template).forEach((k) => {
-					if (k === 'Id' || k === 'CreatedDate' || k === 'LastModifiedDate' || k === 'SystemModstamp') {
-						return;
-					}
-					if (k === 'OwnerId' || k === 'CreatedById' || k === 'LastModifiedById') {
-						return;
-					}
-					if (k === 'AccountId' || k === 'ParentId') {
-						return;
-					} // handled by associations
-					values[k] = template[k];
-				});
-				const tag = '-G' + String(Math.floor(Math.random() * 9000) + 1000);
-				if (values.Name) {
-					values.Name = values.Name + tag;
-				}
-				if (values.LastName) {
-					values.LastName = values.LastName + tag;
-				}
-				if (values.Company) {
-					values.Company = values.Company + tag;
-				}
-				records.push({ tempId, objectName, values });
-				tempIdsByObject[objectName].push(tempId);
-			}
-		}
-
-		const accountTempIds = tempIdsByObject.Account || [];
-		if (accountTempIds.length > 0) {
-			['Contact', 'Opportunity'].forEach((child) => {
-				const childTempIds = tempIdsByObject[child] || [];
-				childTempIds.forEach((tid, i) => {
-					const parentTempId = accountTempIds[i % accountTempIds.length];
-					associations.push({ fromId: tid, toId: parentTempId, fieldName: 'AccountId' });
-				});
-			});
-		}
-
-		return jsonResponse({
-			records,
-			associations,
-			warnings: [],
-			usage: { tokens: 0, costCents: 0, creditMode: false },
-		});
-	}
-
 	async function handleQuery(req) {
 		const body = await req.json().catch(() => ({}));
 		const fullFields = body.fullFields === false ? false : true;
@@ -1788,8 +1722,6 @@
 				return m && handleBatchDelete(decodeURIComponent(m[1]));
 			},
 		},
-
-		{ method: 'POST', match: (u, req) => u.pathname === '/api/ai/plan' && handleAiPlan(req) },
 
 		{ method: 'POST', match: (u, req) => u.pathname === '/api/query' && handleQuery(req) },
 

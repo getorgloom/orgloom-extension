@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.47
+
+- Fixed readable Account Share records incorrectly appearing unavailable after upload or refresh.
+- Allow manual share changes to reach Salesforce for authorization, while retaining object and field permission checks and protections against overwriting newer changes.
+- Corrected the shared-canvas read-only notice so Salesforce access restrictions are not described as canvas sharing restrictions.
+
+## 0.9.46
+
+- Fixed owner-only changes to existing records being skipped during upload.
+- Removed the left border from the message shown when no records need updating.
+
 ## 0.9.45
 
 - Updated the extension's Marketplace description.

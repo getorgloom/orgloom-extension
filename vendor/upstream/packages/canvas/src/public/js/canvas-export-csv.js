@@ -189,6 +189,7 @@
 			}
 
 			function openModal() {
+				if (deps.canSaveOrExport?.() === false) return;
 				const selectedCount = (canvasState.bulkRecords || []).filter(
 					(r) =>
 						r &&
@@ -410,6 +411,8 @@
 			}
 
 			async function verifyCsvExportPermission() {
+				if (deps.canSaveOrExport?.() === false)
+					return { allowed: false, message: 'Only the canvas owner or an editor can export this canvas.' };
 				let response;
 				let data = {};
 				try {
@@ -418,6 +421,8 @@
 						credentials: 'same-origin',
 					});
 					data = await response.json().catch(() => ({}));
+					if (deps.canSaveOrExport?.() === false)
+						return { allowed: false, message: 'Your canvas access changed. No file was downloaded.' };
 				} catch (_error) {
 					return {
 						allowed: false,

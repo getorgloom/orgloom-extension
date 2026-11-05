@@ -45,10 +45,37 @@ class LiveApi {
   }
   importQuery(body) { return this.reads.importQuery(body); }
   async access(records) {
-    if (!Array.isArray(records) || records.length > 200 || records.some(r => !id(r.sfId))) throw new SalesforceError('Invalid access-check records.');
+    if (!Array.isArray(records) || records.length > 200 || records.some(r => !r || !id(r.sfId))) throw new SalesforceError('Invalid access-check records.');
     if (!records.length) return { results: [] };
-    const data = await this.query(`SELECT RecordId, HasReadAccess, HasEditAccess, HasDeleteAccess FROM UserRecordAccess WHERE UserId = ${literal(this.userId)} AND RecordId IN (${records.map(r => literal(r.sfId)).join(',')})`);
-    return { results: records.map(r => { const access = data.records?.find(a => a.RecordId.slice(0,15) === r.sfId.slice(0,15)); return { tempId: r.tempId, sfId: r.sfId, access: { checked: true, hasReadAccess: access?.HasReadAccess === true, hasEditAccess: access?.HasEditAccess === true, hasDeleteAccess: access?.HasDeleteAccess === true } }; }) };
+    // AccountShare can be readable through the user's API connection even when
+    // UserRecordAccess reports false. Identify it using Salesforce metadata,
+    // never a webview-supplied object name or permission claim.
+    const sharePrefix = (await this.metadata.objects()).find(o => o.name === 'AccountShare')?.keyPrefix;
+    const isAccountShare = r => typeof sharePrefix === 'string' && sharePrefix.length === 3 && r.sfId.startsWith(sharePrefix);
+    const shares = records.filter(isAccountShare), ordinary = records.filter(r => !isAccountShare(r));
+    const data = ordinary.length ? await this.query(`SELECT RecordId, HasReadAccess, HasEditAccess, HasDeleteAccess FROM UserRecordAccess WHERE UserId = ${literal(this.userId)} AND RecordId IN (${ordinary.map(r => literal(r.sfId)).join(',')})`) : { records: [] };
+    let shareData, shareDescribe;
+    if (shares.length) {
+      shareDescribe = await this.describe('AccountShare');
+      shareData = await this.query(`SELECT Id, RowCause FROM AccountShare WHERE Id IN (${shares.map(r => literal(r.sfId)).join(',')})`);
+    }
+    this.assertActive();
+    return { results: records.map(r => {
+      if (isAccountShare(r)) {
+        const row = shareData.records?.find(a => a.Id?.slice(0,15) === r.sfId.slice(0,15));
+        const manual = row?.RowCause === 'Manual';
+        return { tempId: r.tempId, sfId: r.sfId, access: {
+          checked: true, hasReadAccess: !!row,
+          // Read access is not proof of write access. Manual shares may be
+          // prepared for upload; Salesforce authorizes the actual PATCH/DELETE.
+          hasEditAccess: manual && shareDescribe.updateable === true ? null : false,
+          hasDeleteAccess: manual && shareDescribe.deletable === true ? null : false,
+          writeAccessRequiresSalesforce: manual,
+        } };
+      }
+      const access = data.records?.find(a => a.RecordId?.slice(0,15) === r.sfId.slice(0,15));
+      return { tempId: r.tempId, sfId: r.sfId, access: { checked: true, hasReadAccess: access?.HasReadAccess === true, hasEditAccess: access?.HasEditAccess === true, hasDeleteAccess: access?.HasDeleteAccess === true } };
+    }) };
   }
   upload(body) { return this.uploader.upload(body); }
   checkPending() { return this.uploader.checkPending(); }

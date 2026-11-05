@@ -85,8 +85,10 @@ function csrfFetch(url, options) {
 	);
 
 	function _canEditCanvasStructure() {
-		const shareRole = _getCanvasShareRole();
-		return !shareRole || shareRole === 'editor';
+		return _canvasActionAccess().canPersistCanvas;
+	}
+	function _canvasActionAccess() {
+		return window.OrgLoom.bulkToolbar.canvasAccess(canvasState.currentCanvas, _getCanvasShareRole());
 	}
 
 	const _canvasGuideScope =
@@ -537,6 +539,7 @@ function csrfFetch(url, options) {
 	const openCanvasSearchModal = _csr.openModal;
 
 	const _cec = window.OrgLoom.canvasExportCsv.mount({
+		canSaveOrExport: _canEditCanvasStructure,
 		canvasState: canvasState,
 		csrfFetch: csrfFetch,
 		escapeHtml: escapeHtml,
@@ -5654,7 +5657,52 @@ function csrfFetch(url, options) {
 		return toRemove.length;
 	}
 
-	async function _saveNewRequestCanvas(config) {
+	let _requestSaveQueue = Promise.resolve();
+	function _saveRequestChange(rec) {
+		const canvas = canvasState.currentCanvas;
+		if (!canvas?.id) return promptCanvasSave({ title: 'Save this canvas to save request changes' });
+		const save = async () => {
+			if (!canvas?.id || canvasState.currentCanvas !== canvas || !canvasState.bulkRecords.includes(rec))
+				return false;
+			try {
+				const payload = buildCanvasPayload();
+				const record = [...payload.loadedRecords, ...payload.drafts].find(
+					(row) => row.canvasRecordId === rec._canvasRecordId,
+				);
+				if (!record) throw new Error('This record is no longer available.');
+				const result = await platform.saveRequestChange({
+					canvas,
+					record,
+					schemaObject: payload.schema.objects.find((object) => object.name === rec.objectName),
+					csrfFetch,
+				});
+				if (canvasState.currentCanvas !== canvas) return false;
+				canvas.versionId = result.versionId;
+				_canvasSaveState.captureRequest(result.record, result.schemaObject);
+				await platform.recovery?.requestSaved?.();
+				return true;
+			} catch (error) {
+				showBulkToastWithAction(
+					'Request changes could not be saved. Your changes are still on this canvas. ' +
+						(error.message || error),
+					'Retry',
+					async () => {
+						if (await _saveRequestChange(rec)) showBulkToast('Request changes saved.');
+					},
+					'error',
+				);
+				return false;
+			} finally {
+				await platform.recovery?.saved?.(false);
+			}
+		};
+		const pending = _requestSaveQueue.then(save);
+		_requestSaveQueue = pending.catch(() => false);
+		return pending;
+	}
+
+	async function _saveNewRequestCanvas(config, rec) {
+		if (platform.saveRequestChange) return _saveRequestChange(rec);
 		if (!config.savedCanvasForRequest) return true;
 		if (!canvasState.currentCanvas || canvasState.currentCanvas.id !== config.savedCanvasForRequest) return false;
 		if (await saveExistingCanvas()) return true;
@@ -5706,7 +5754,7 @@ function csrfFetch(url, options) {
 			assigneeEmail: config.assigneeEmail || null,
 		};
 		renderBulkView();
-		if (!(await _saveNewRequestCanvas(config))) return;
+		if (!(await _saveNewRequestCanvas(config, rec))) return;
 		const _assigneeBit = config.assigneeName
 			? ' (assigned to ' + config.assigneeName + ')'
 			: ' (open to any recipient)';
@@ -5800,7 +5848,13 @@ function csrfFetch(url, options) {
 			);
 			renderBulkView();
 		});
-		if (!(await _saveNewRequestCanvas(config))) return false;
+		if (
+			!(await _saveNewRequestCanvas(
+				config,
+				canvasState.bulkRecords.find((record) => record.id === recordId),
+			))
+		)
+			return false;
 		const _slotAssigneeBit = config.assigneeName
 			? ' (assigned to ' + config.assigneeName + ')'
 			: ' (open to any recipient)';
@@ -5924,19 +5978,20 @@ function csrfFetch(url, options) {
 		}
 		renderBulkView();
 		_publishPresenceChanges();
-		if (!(await _saveNewRequestCanvas(config))) return;
+		if (!(await _saveNewRequestCanvas(config, rec))) return;
 		showBulkToast(
 			(kind === 'fields' ? 'Field request' : 'Record request') + ' updated for everyone viewing this canvas.',
 		);
 	}
 
-	function convertSlotBackToRecord(rec, options) {
+	async function convertSlotBackToRecord(rec, options) {
 		if (!rec || !rec.slot) {
 			return;
 		}
 		delete rec.slot;
 		delete rec._recipientSlot;
 		renderBulkView();
+		if (platform.saveRequestChange && !(await _saveRequestChange(rec))) return;
 		showBulkToast(
 			options && options.convertedToDraft ? 'Record request converted to a draft.' : 'Removed request.',
 		);
@@ -7018,6 +7073,7 @@ function csrfFetch(url, options) {
 	}
 
 	const _csl = window.OrgLoom.canvasSaveLoad.mount({
+		canSaveOrExport: _canEditCanvasStructure,
 		canvasState: canvasState,
 		csrfFetch: csrfFetch,
 		escapeHtml: escapeHtml,
@@ -7324,6 +7380,7 @@ function csrfFetch(url, options) {
 	const showBulkSwitchWarning = _sm.showBulkSwitchWarning;
 
 	const _uh = window.OrgLoom.uploadHistory.mount({
+		canUseHistory: () => _canvasActionAccess().canManageCanvas,
 		csrfFetch: csrfFetch,
 		escapeHtml: escapeHtml,
 		showBulkToast: showBulkToast,
@@ -7979,7 +8036,7 @@ function csrfFetch(url, options) {
 		},
 		busy: () => _canvasReplacementLoads > 0 || canvasState.migrateMode.active,
 		readOnly: () => canvasState.currentCanvas?.recipientRole === 'viewer',
-		restore: async (data) => {
+		restore: async (data, options = {}) => {
 			const current = data.id
 				? {
 						id: data.id,
@@ -8000,7 +8057,8 @@ function csrfFetch(url, options) {
 			_canvasShareCanvasId = current && !current.ownedByMe ? current.id : null;
 			_canvasShareRole = current?.recipientRole || null;
 			canvasState._renderCanvasShareRole = _canvasShareRole;
-			_canvasSaveState.markRestored();
+			if (options.saved) _canvasSaveState.captureSaved();
+			else _canvasSaveState.markRestored();
 			renderShareRecipientBanner();
 			renderBulkView();
 			renderBulkToolbar();

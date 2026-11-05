@@ -8,6 +8,37 @@ const {fixture}=require('./upload-fixture.cjs');
 const confirmations = reply => reply.data.conflicts.map(r=>({sfId:r.sfId,fields:r.fields.map(f=>({fieldName:f.fieldName,expectedCurrent:f.current}))}));
 const send = (f,body) => f.api.handle({type:'live-api',id:1,path:'/api/upload/graph',method:'POST',body});
 
+test('Owner-only edits survive canvas payload cleanup and reach Salesforce; unchanged owners are skipped',async()=>{
+  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+  const context={window:{OrgLoom:{}}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../vendor/upstream/packages/canvas/src/public/js/upload-modal.js'),'utf8'),context);
+  const strip=context.window.OrgLoom.uploadModal.shouldStripUploadField;
+  const f=fixture();
+  f.fields.push({name:'OwnerId',type:'reference',referenceTo:['User'],createable:true,updateable:true});
+  const original='005000000000001AAA',next='005000000000002AAA';
+  const account=f.seed('Account',{Name:'Owner transfer',OwnerId:original});
+  const row=await f.loaded(1,'Account',account,{OwnerId:next});
+  const known=new Set((await f.api.describe('Account')).fields.map(field=>field.name));
+  for(const name of Object.keys(row.values))if(strip(name,known))delete row.values[name];
+  const result=await f.api.upload(f.body([row]));
+  assert.equal(result.results.filter(r=>r.success).length,1);
+  assert.deepEqual(f.calls.find(c=>c.method==='PATCH')?.body,{OwnerId:next});
+  assert.equal(f.db.get(account.Id).record.OwnerId,next);
+  const writes=f.calls.filter(c=>c.method).length;
+  const unchanged=await f.loaded(1,'Account',f.db.get(account.Id).record);
+  await f.api.upload(f.body([unchanged]));
+  assert.equal(f.calls.filter(c=>c.method).length,writes);
+});
+
+test('Owner changes still require writable field permission',async()=>{
+  const f=fixture();
+  f.fields.push({name:'OwnerId',type:'reference',referenceTo:['User'],createable:false,updateable:false});
+  const account=f.seed('Account',{Name:'Restricted owner',OwnerId:'005000000000001AAA'});
+  const row=await f.loaded(1,'Account',account,{OwnerId:'005000000000002AAA'});
+  await assert.rejects(f.api.upload(f.body([row])),/cannot write field OwnerId/);
+  assert.equal(f.calls.filter(c=>c.method).length,0);
+});
+
 test('Pending journals and completed receipts omit submitted values while preserving replay protection',async()=>{
   const f=fixture(),existing=f.seed('Account',{Name:'PRIVATE ORIGINAL VALUE'});
   const body=f.body([await f.loaded(1,'Account',existing,{Name:'PRIVATE UPDATE VALUE'}),f.draft(2,'Account',{Name:'PRIVATE CREATE VALUE'})]);

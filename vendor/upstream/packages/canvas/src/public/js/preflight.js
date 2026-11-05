@@ -295,10 +295,23 @@
 								addIssue(rec, f, 'error', 'Value isn\u2019t a valid number.');
 							} else if (f.type === 'int' && !Number.isInteger(n)) {
 								addIssue(rec, f, 'error', 'Value must be an integer.');
-							} else if (Number.isInteger(f.precision) && f.precision > 0 && Number.isInteger(f.scale) && f.scale >= 0 && f.scale <= f.precision) {
+							} else if (
+								Number.isInteger(f.precision) &&
+								f.precision > 0 &&
+								Number.isInteger(f.scale) &&
+								f.scale >= 0 &&
+								f.scale <= f.precision
+							) {
 								const integerDigits = f.precision - f.scale;
 								if (Math.abs(n) >= Math.pow(10, integerDigits)) {
-									addIssue(rec, f, 'error', 'Value exceeds the destination limit of ' + integerDigits + ' digits before the decimal point.');
+									addIssue(
+										rec,
+										f,
+										'error',
+										'Value exceeds the destination limit of ' +
+											integerDigits +
+											' digits before the decimal point.',
+									);
 								}
 							}
 						}

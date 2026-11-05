@@ -129,6 +129,43 @@
 				return refresh();
 			}
 
+			// Advance only the portion persisted by a request save. Other canvas
+			// changes must still compare against the previous saved revision.
+			function captureRequest(record, schemaObject) {
+				if (baseline === null) return refresh();
+				const saved = JSON.parse(baseline);
+				const identity = (row) => (row.loadedFromId ? 'loaded:' + row.loadedFromId : 'draft:' + row.tempId);
+				const key = record.loadedFromId ? 'loadedRecords' : 'drafts';
+				const rows = saved[key] || (saved[key] = []);
+				let row = rows.find((candidate) => identity(candidate) === identity(record));
+				const endpoint = (value) =>
+					value.slot
+						? { kind: 'slot', ref: value.slot.slotId }
+						: { kind: value.loadedFromId ? 'loaded' : 'draft', ref: value.loadedFromId || value.tempId };
+				if (row) {
+					const oldEndpoint = endpoint(row);
+					if (record.slot) row.slot = record.slot;
+					else delete row.slot;
+					const nextEndpoint = endpoint(row);
+					for (const link of saved.associations || [])
+						for (const side of ['from', 'to']) {
+							if (
+								link[side]?.kind === oldEndpoint.kind &&
+								String(link[side].ref) === String(oldEndpoint.ref)
+							) {
+								link[side] = { ...nextEndpoint };
+							}
+						}
+				} else rows.push(record);
+				if (schemaObject) {
+					const objects = saved.schema.objects;
+					if (!objects.some((object) => object.name === schemaObject.name)) objects.push(schemaObject);
+				}
+				baseline = fingerprint(saved);
+				state.savedAt = Date.now();
+				return refresh();
+			}
+
 			function markSaving() {
 				if (!canPersistCurrentCanvas()) {
 					return false;
@@ -193,6 +230,7 @@
 				setPayloadProvider,
 				refresh,
 				captureSaved,
+				captureRequest,
 				markRestored,
 				markSaving,
 				markDirty,

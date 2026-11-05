@@ -50,11 +50,11 @@
 		'LastReferencedDate',
 		'LastViewedDate',
 		'IsDeleted',
-		'OwnerId',
 		'MasterRecordId',
 	]);
 
 	function shouldStripUploadField(fieldName, knownFields) {
+		// OwnerId is editable relationship data; write permissions are enforced by the upload backend.
 		if (UPLOAD_SYSTEM_FIELDS.has(fieldName)) {
 			return true;
 		}
@@ -219,7 +219,9 @@
 
 	function reconcileSyncedRecords(records, synced, canonicalValues, submittedSnapshots, associations) {
 		const realIdByTempId = new Map((synced || []).map((result) => [result.tempId, result.id]));
-		const unchangedIds = new Set((synced || []).filter((result) => result.mode === 'unchanged').map((result) => result.tempId));
+		const unchangedIds = new Set(
+			(synced || []).filter((result) => result.mode === 'unchanged').map((result) => result.tempId),
+		);
 		const salesforceIdByCanvasRef = new Map();
 		for (const [tempId, sfId] of realIdByTempId) {
 			if (tempId != null && sfId) {
@@ -3325,7 +3327,8 @@
 						html +=
 							'<div class="banner"><strong>No records were uploaded.</strong> Read-only changes remain on the canvas.</div>';
 					} else {
-						html += '<div class="banner">No records needed updating in Salesforce.</div>';
+						html +=
+							'<div class="banner" style="border-left:0">No records needed updating in Salesforce.</div>';
 					}
 				}
 				const refreshWarning = postUploadRefreshWarning(synced, canonicalValues);

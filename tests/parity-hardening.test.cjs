@@ -34,7 +34,7 @@ test('desktop cannot author record or field requests even if legacy capabilities
     ['async function convertRecordToFieldSlot', 'async function createStandaloneRecordRequest'],
     ['async function createStandaloneRecordRequest', 'function openStandaloneRecordRequestPicker'],
     ['function openStandaloneRecordRequestPicker', 'function _slotRecordDisplayName'],
-    ['async function configureExistingSlot', 'function convertSlotBackToRecord']
+    ['async function configureExistingSlot', 'async function convertSlotBackToRecord']
   ].map(([start, end]) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))));
   const messages = [], ctx = vm.createContext({ _canAuthorSlots: cap._canAuthorSlots, showBulkToast: message => messages.push(message) });
   vm.runInContext(snippets.join('\n'), ctx);

@@ -61,6 +61,11 @@
 
 				let _seq = 0;
 				let _picked = null;
+				let excludedUserKeys = new Set();
+				const userKey = (id) =>
+					String(id || '')
+						.slice(0, 15)
+						.toUpperCase();
 
 				async function runSearch(q) {
 					const mySeq = ++_seq;
@@ -76,6 +81,7 @@
 							return;
 						}
 						const data = await r.json().catch(() => null);
+						if (mySeq !== _seq) return;
 						if (!r.ok) {
 							results.innerHTML =
 								'<div class="sf-user-picker-empty">' +
@@ -83,16 +89,11 @@
 								'</div>';
 							return;
 						}
-						const currentUserKey = String(window.SF_USER_ID || '')
-							.slice(0, 15)
-							.toUpperCase();
+						const currentUserKey = userKey(window.SF_USER_ID);
 						const users = ((data && data.users) || []).filter(
 							(user) =>
-								!excludeCurrentUser ||
-								!currentUserKey ||
-								String((user && user.id) || '')
-									.slice(0, 15)
-									.toUpperCase() !== currentUserKey,
+								!excludedUserKeys.has(userKey(user && user.id)) &&
+								(!excludeCurrentUser || !currentUserKey || userKey(user && user.id) !== currentUserKey),
 						);
 						if (users.length === 0) {
 							results.innerHTML =
@@ -206,6 +207,14 @@
 				});
 
 				return {
+					setExcludedUserIds(ids) {
+						excludedUserKeys = new Set(ids.map(userKey));
+						const refresh = !input.hidden && (!results.hidden || document.activeElement === input);
+						_seq += 1;
+						results.innerHTML = '';
+						results.hidden = true;
+						if (refresh) runSearch(input.value.trim());
+					},
 					getPicked() {
 						return _picked;
 					},
@@ -384,6 +393,7 @@
 							throw new Error((data && data.error) || 'HTTP ' + response.status);
 						}
 						const directShares = (data && data.directShares) || [];
+						picker.setExcludedUserIds(directShares.map((share) => share.sfUserId));
 						if (directShares.length === 0) {
 							listEl.innerHTML = '<div class="tag cs-manage-empty">Only you can open this canvas.</div>';
 							return;

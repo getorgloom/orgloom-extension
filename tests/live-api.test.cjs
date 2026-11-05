@@ -79,4 +79,93 @@ test('Permission denial and conditional-update conflict never report success',as
     assert.equal(await f.secret.get(f.api.pendingKey),undefined);
   }
 });
+const SHARE_ID='00r000000000001AAA';
+function accountShareFixture({rowCause='Manual',visible=true,updateable=true,deletable=true,denyWrite=false}={}) {
+  const f=fixture(), original=f.client.request;
+  Object.assign(f.record,{Id:SHARE_ID,RowCause:rowCause,AccountAccessLevel:'Read'});
+  f.fields.push({name:'AccountAccessLevel',type:'picklist',updateable:true});
+  f.client.request=async(route,options={})=>{
+    if(route.endsWith('/sobjects/'))return {sobjects:[{name:'Account',queryable:true,keyPrefix:'001'},{name:'AccountShare',queryable:true,keyPrefix:'00r'}]};
+    if(route.endsWith('/AccountShare/describe'))return {...await original(route,options),name:'AccountShare',updateable,deletable};
+    const q=route.includes('/query?')?new URLSearchParams(route.split('?')[1]).get('q'):'';
+    if(q.includes('UserRecordAccess'))return {records:[ID,SHARE_ID].map(RecordId=>({RecordId,HasReadAccess:false,HasEditAccess:false,HasDeleteAccess:false}))};
+    if(q.startsWith('SELECT Id, RowCause FROM AccountShare'))return {records:visible?[{Id:SHARE_ID,RowCause:rowCause}]:[]};
+    if(denyWrite && ['PATCH','DELETE'].includes(options.method))throw new SalesforceError('Salesforce denied the share change.','INSUFFICIENT_ACCESS_OR_READONLY',403);
+    return original(route,options);
+  };
+  f.body=()=>({attemptId:'account-share-test',expectedSfOrgId:ORG,records:[{tempId:1,objectName:'AccountShare',loadedFromId:SHARE_ID,loadedValues:{...f.record},values:{...f.record,AccountAccessLevel:'Edit'}}],deletes:[],associations:[],skipTempIds:[]});
+  return f;
+}
+
+test('AccountShare read access comes from an authenticated read, without claiming write access',async()=>{
+  const f=accountShareFixture();
+  const {results}=await f.api.access([{tempId:1,sfId:SHARE_ID},{tempId:2,sfId:ID,objectName:'AccountShare'}]);
+  assert.deepEqual(results[0].access,{checked:true,hasReadAccess:true,hasEditAccess:null,hasDeleteAccess:null,writeAccessRequiresSalesforce:true});
+  assert.deepEqual(results[1].access,{checked:true,hasReadAccess:false,hasEditAccess:false,hasDeleteAccess:false},'A claimed object name cannot bypass normal record access');
+});
+
+test('Missing shares, system shares and disabled object permissions do not permit edits',async()=>{
+  for(const options of [{visible:false},{rowCause:'Owner'},{rowCause:'Rule'},{updateable:false,deletable:false}]){
+    const f=accountShareFixture(options);
+    const {results}=await f.api.access([{tempId:1,sfId:SHARE_ID}]);
+    assert.equal(results[0].access.hasReadAccess,options.visible!==false);
+    assert.equal(results[0].access.hasEditAccess,false);
+    assert.equal(results[0].access.hasDeleteAccess,false);
+    const out=await f.api.handle(message('/api/upload',f.body()));
+    assert.ok(out.status>=400);
+    assert.equal(f.calls.filter(c=>c.method==='PATCH').length,0);
+  }
+});
+
+test('Manual share updates retain field permissions and Salesforce write authorization',async()=>{
+  for(const denyWrite of [false,true]){
+    const f=accountShareFixture({denyWrite});
+    await f.api.retrieve('AccountShare',SHARE_ID);
+    const out=await f.api.handle(message('/api/upload',f.body()));
+    assert.equal(out.status,200);
+    assert.equal(out.data.results[0].success,!denyWrite);
+    if(denyWrite)assert.equal(out.data.results[0].errorCode,'INSUFFICIENT_ACCESS_OR_READONLY');
+    else {
+      const patch=f.calls.find(c=>c.method==='PATCH');
+      assert.deepEqual(patch.body,{AccountAccessLevel:'Edit'});
+      assert.ok(patch.headers['If-Unmodified-Since']);
+    }
+  }
+  const f=accountShareFixture();
+  f.fields.find(field=>field.name==='AccountAccessLevel').updateable=false;
+  const out=await f.api.handle(message('/api/upload',f.body()));
+  assert.equal(out.data.error,'unsupported-field');
+  assert.equal(f.calls.filter(c=>c.method==='PATCH').length,0);
+});
+
+test('AccountShare checks do not turn metadata, query or connection failures into grants',async()=>{
+  for(const failure of ['directory','describe','query','identity']){
+    const f=accountShareFixture(),original=f.client.request;
+    f.client.request=async(route,options)=>{
+      if((failure==='directory'&&route.endsWith('/sobjects/')) || (failure==='describe'&&route.endsWith('/AccountShare/describe')) || (failure==='query'&&decodeURIComponent(route).includes('SELECT Id, RowCause FROM AccountShare')))throw new SalesforceError('Access check failed.','INSUFFICIENT_ACCESS',403);
+      const result=await original(route,options);
+      if(failure==='identity'&&decodeURIComponent(route).includes('SELECT Id, RowCause FROM AccountShare'))f.api.active=false;
+      return result;
+    };
+    const out=await f.api.handle(message('/api/records/access',{records:[{tempId:1,sfId:SHARE_ID}]}));
+    assert.ok(out.status>=400,failure);
+    assert.equal(out.data.results,undefined);
+  }
+});
+
+test('Manual share deletion is still authorized by Salesforce and respects delete metadata',async()=>{
+  for(const mode of ['allowed','denied','object-denied','system-share']){
+    const f=accountShareFixture({denyWrite:mode==='denied',deletable:mode!=='object-denied',rowCause:mode==='system-share'?'Owner':'Manual'});
+    const body=f.body();
+    body.records=[];
+    body.deletes=[{tempId:1,objectName:'AccountShare',sfId:SHARE_ID}];
+    const out=await f.api.handle(message('/api/upload',body));
+    if(mode==='object-denied'||mode==='system-share')assert.ok(out.status>=400);
+    else {
+      assert.equal(out.status,200);
+      assert.equal(out.data.deletes[0].success,mode==='allowed');
+      if(mode==='denied')assert.equal(out.data.deletes[0].errorCode,'INSUFFICIENT_ACCESS_OR_READONLY');
+    }
+  }
+});
 module.exports={fixture,ID,ORG,USER};

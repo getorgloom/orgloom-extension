@@ -322,15 +322,19 @@
 							title: convertingRecordRequest
 								? 'Convert this record request to a draft?'
 								: 'Remove this field request?',
-							message: convertingRecordRequest
-								? 'The request will end and the placeholder will become a normal draft you can edit. Save the canvas to publish the change.'
-								: 'The record stays on the canvas, but teammates will no longer be asked to complete these fields. Save the canvas to publish the change.',
+							message:
+								(convertingRecordRequest
+									? 'The request will end and the placeholder will become a normal draft you can edit.'
+									: 'The record stays on the canvas, but teammates will no longer be asked to complete these fields.') +
+								(window.OrgLoom.platform?.saveRequestChange
+									? ''
+									: ' Save the canvas to publish the change.'),
 							confirmLabel: convertingRecordRequest ? 'Convert to draft' : 'Remove request',
 							cancelLabel: 'Cancel',
 							danger: !convertingRecordRequest,
 						});
 						if (ok) {
-							convertSlotBackToRecord(rec, { convertedToDraft: convertingRecordRequest });
+							await convertSlotBackToRecord(rec, { convertedToDraft: convertingRecordRequest });
 						}
 					} else if (action === 'unlink') {
 						if (typeof deps.unlinkRecord === 'function') {
@@ -562,7 +566,7 @@
 						: '';
 					const fieldSection = fieldMode
 						? '<div class="slot-config-section">' +
-							'<div class="slot-config-section-heading"><div><strong>Fields to complete</strong><div class="help">The teammate can update only the fields selected here. Other fields remain read-only.</div></div><span class="meta" data-slot-field-count></span></div>' +
+							'<div class="slot-config-section-heading"><strong>Fields to complete</strong></div>' +
 							'<input type="search" class="slot-config-field-search" data-slot-field-search placeholder="Find a field" autocomplete="off">' +
 							'<div class="field-slot-pick-list">' +
 							fieldRows +
@@ -745,19 +749,27 @@
 						await checkAssigneeAccess(picker && picker.getPicked());
 					};
 
+					let assigneeSelectionVersion = 0;
 					picker = attachSfUserPicker(overlay.querySelector('[data-slot-assignee-picker]'), {
 						placeholder: 'Search a teammate to assign…',
 						changeLabel: 'Change teammate',
 						excludeCurrentUser: true,
 						onPick: () => {
+							assigneeSelectionVersion += 1;
 							errorEl.hidden = true;
 							refreshAssigneeAccess();
 						},
 					});
-					if (initial.assigneeSfUserId) {
+					const savedAssigneeName = String(initial.assigneeName || '').trim();
+					const needsAssigneeName =
+						initial.assigneeSfUserId &&
+						(!savedAssigneeName ||
+							/^assigned teammate$/i.test(savedAssigneeName) ||
+							savedAssigneeName === initial.assigneeEmail);
+					if (initial.assigneeSfUserId && !needsAssigneeName) {
 						picker.setPicked({
 							id: initial.assigneeSfUserId,
-							name: initial.assigneeName || initial.assigneeEmail || 'Assigned teammate',
+							name: savedAssigneeName,
 							email: initial.assigneeEmail || '',
 						});
 					}
@@ -776,20 +788,37 @@
 						}
 					};
 					assignmentInputs.forEach((input) => {
-						input.addEventListener('change', () => syncAssignmentUi(input.value === 'specific'));
+						input.addEventListener('change', () => {
+							assigneeSelectionVersion += 1;
+							syncAssignmentUi(input.value === 'specific');
+						});
 					});
 					syncAssignmentUi(false);
+					if (needsAssigneeName) {
+						showAccessState('loading', 'Loading the assigned user’s name…');
+						const version = assigneeSelectionVersion;
+						const stillCurrent = () => overlay.isConnected && assigneeSelectionVersion === version;
+						(async () => {
+							try {
+								const response = await csrfFetch(
+									'/api/objects/User/records/' + encodeURIComponent(initial.assigneeSfUserId),
+									{ credentials: 'same-origin' },
+								);
+								const user = await response.json();
+								if (!stillCurrent()) return;
+								if (!response.ok || !user.Name || !sameSfUser(user.Id, initial.assigneeSfUserId))
+									throw new Error('Assignee unavailable');
+								picker.setPicked({ id: user.Id, name: user.Name, email: user.Email || '' });
+							} catch (_) {
+								if (!stillCurrent()) return;
+								accessEl.hidden = true;
+								errorEl.textContent =
+									'Could not load the assigned user’s name. Choose the teammate again, or cancel to keep the existing assignment.';
+								errorEl.hidden = false;
+							}
+						})();
+					}
 
-					const updateFieldCount = () => {
-						const count = overlay.querySelectorAll('[data-slot-field-row] input:checked').length;
-						const countEl = overlay.querySelector('[data-slot-field-count]');
-						if (countEl) {
-							countEl.textContent = count + ' selected';
-						}
-					};
-					overlay.querySelectorAll('[data-slot-field-row] input').forEach((input) => {
-						input.addEventListener('change', updateFieldCount);
-					});
 					const search = overlay.querySelector('[data-slot-field-search]');
 					if (search) {
 						search.addEventListener('input', () => {
@@ -803,7 +832,6 @@
 							});
 						});
 					}
-					updateFieldCount();
 
 					const cleanup = (result) => {
 						overlay.remove();

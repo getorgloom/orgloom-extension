@@ -217,7 +217,11 @@ class Uploads {
       const access = await api.access(existing.slice(offset, offset + 200).map(o => ({ tempId: o.tempId, sfId: o.recordId })));
       for (const op of existing.slice(offset, offset + 200)) {
         const rights = access.results.find(r => r.tempId === op.tempId)?.access;
-        if (!(op.mode === 'delete' ? rights?.hasDeleteAccess : rights?.hasEditAccess)) fail('Salesforce does not allow ' + op.mode + ' on this record.', 'record-access-denied', 403);
+        const allowed = op.mode === 'delete' ? rights?.hasDeleteAccess : rights?.hasEditAccess;
+        // Only the fresh host-side AccountShare check can defer write permission
+        // to Salesforce DML. Object/FLS checks and conditional writes still apply.
+        const checkOnWrite = op.objectName === 'AccountShare' && rights?.checked === true && rights.hasReadAccess === true && rights.writeAccessRequiresSalesforce === true && allowed === null;
+        if (allowed !== true && !checkOnWrite) fail('Salesforce does not allow ' + op.mode + ' on this record.', 'record-access-denied', 403);
       }
     }
     return ordered;

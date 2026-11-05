@@ -359,9 +359,7 @@
 						const ctas = !canCompleteRequest
 							? ''
 							: isLocked
-								? '<div class="record-slot-locked-note">Assigned to ' +
-									escapeHtml(rec.slot.assigneeName || rec.slot.assigneeEmail || 'another teammate') +
-									'; they need to complete this record request.</div>'
+								? ''
 								: blockedByAccess
 									? accessNotice +
 										'<div class="record-slot-ctas"><button class="record-slot-cta" disabled>Cannot complete</button></div>'
@@ -1055,7 +1053,7 @@
 							);
 							return;
 						}
-						if (_isSlotLockedForCurrentUser(rec)) {
+						if (_isSlotLockedForCurrentUser(rec) && rec.slot.kind !== 'fields') {
 							const who = rec.slot.assigneeName || rec.slot.assigneeEmail || 'another teammate';
 							showBulkToast('Reserved for ' + who + ': only they can fill this slot.', 'info');
 							return;
@@ -1342,7 +1340,7 @@
 								);
 								return;
 							}
-							if (_isSlotLockedForCurrentUser(rec)) {
+							if (_isSlotLockedForCurrentUser(rec) && rec.slot.kind !== 'fields') {
 								const who = rec.slot.assigneeName || rec.slot.assigneeEmail || 'another teammate';
 								showBulkToast('Reserved for ' + who + ': only they can fill this slot.', 'info');
 								return;

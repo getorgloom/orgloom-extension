@@ -11,10 +11,12 @@
 		return {
 			isRecipient,
 			canPersistCanvas: !isRecipient || resolvedRole === 'editor',
+			canManageCanvas: !isRecipient,
 		};
 	}
 
 	window.OrgLoom.bulkToolbar = {
+		canvasAccess: toolbarCanvasAccess,
 		_test: { toolbarCanvasAccess },
 		mount: function mount(deps) {
 			const required = [
@@ -139,8 +141,13 @@
 					(r) => !r.loadedFromId && !r.isTypeNode,
 				).length;
 				const _uploadEmpty = canvasState.bulkRecords.filter((r) => !r.isTypeNode).length === 0;
-				const bulkOpsBtn =
-					'<button type="button" class="batch-btn" data-bulk-ops title="Generate records with AI, auto-fill drafts, bulk edit fields, run a script, or compare records">Tools ▾</button>';
+				const bulkOpsBtn = canEditCanvasStructure()
+					? '<button type="button" class="batch-btn" data-bulk-ops title="' +
+						(window.ORGLOOM_MOCK
+							? 'Auto-fill drafts, bulk edit fields, run a script, or compare records'
+							: 'Generate records with AI, auto-fill drafts, bulk edit fields, run a script, or compare records') +
+						'">Tools ▾</button>'
+					: '';
 				const _allRealCount = canvasState.bulkRecords.filter((r) => !r.isTypeNode).length;
 				const _selectedRealCount = canvasState.bulkRecords.filter(
 					(r) => !r.isTypeNode && canvasState.bulkSelectedIds.has(r.id),
@@ -205,9 +212,6 @@
 						'</button>' +
 						'<button type="button" class="batch-btn batch-btn-split-arrow" data-bulk-save title="More save and export options" aria-label="More save and export options">\u25BE</button>' +
 						'</span>';
-				} else if (isRecipient) {
-					saveCanvasBtn =
-						'<button type="button" class="batch-btn" data-bulk-save title="Save a copy or export this shared canvas">Save / export \u25BC</button>';
 				}
 				const exportBtn = '';
 				const helpBtn = '';
@@ -270,15 +274,17 @@
 						? ' <span class="canvas-share-btn-count">' + shareCount + '</span>'
 						: '') +
 					'</button>';
-				const shareBtn = shareDisabled
-					? '<span class="canvas-toolbar-disabled-tip" tabindex="0" title="' +
-						shareTitle +
-						'" aria-label="' +
-						shareTitle +
-						'">' +
-						shareButton +
-						'</span>'
-					: shareButton;
+				const shareBtn = !canvasAccess.canManageCanvas
+					? ''
+					: shareDisabled
+						? '<span class="canvas-toolbar-disabled-tip" tabindex="0" title="' +
+							shareTitle +
+							'" aria-label="' +
+							shareTitle +
+							'">' +
+							shareButton +
+							'</span>'
+						: shareButton;
 				const playgroundResetBtn = window.ORGLOOM_MOCK
 					? '<button type="button" class="batch-btn" data-playground-reset title="Clear your demo changes and start over">Reset demo</button>'
 					: '';
@@ -288,10 +294,11 @@
 					'<path d="M3 3v5h5"/>' +
 					'<path d="M12 7v5l4 2"/>' +
 					'</svg>';
-				const historyBtn =
-					'<button type="button" class="batch-btn batch-btn-icon" data-app-history title="Recent uploads: recall a previous batch" aria-label="Upload history">' +
-					_historyIconSvg +
-					'</button>';
+				const historyBtn = !canvasAccess.canManageCanvas
+					? ''
+					: '<button type="button" class="batch-btn batch-btn-icon" data-app-history title="Recent uploads: recall a previous batch" aria-label="Upload history">' +
+						_historyIconSvg +
+						'</button>';
 				const canvasesBtn = window.OrgLoom.platform?.toolbar?.showCanvasesMenu
 					? '<button type="button" class="batch-btn" data-app-canvases title="Open saved canvases" aria-haspopup="menu">Canvases ▾</button>'
 					: '';

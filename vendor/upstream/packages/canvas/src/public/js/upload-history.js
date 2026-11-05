@@ -29,6 +29,8 @@
 			const uploadHistoryPageSize = 15;
 
 			function recallCapabilityState() {
+				if (deps.canUseHistory?.() === false)
+					return { allowed: false, title: 'Return to your own canvas to use upload history and Recall' };
 				if (!isCapabilityReady()) {
 					return { allowed: false, title: 'Checking Recall uploads access' };
 				}
@@ -98,6 +100,7 @@
 			}
 
 			function showUploadHistoryModal() {
+				if (deps.canUseHistory?.() === false) return;
 				document.querySelectorAll('.upload-history-modal').forEach((el) => el.remove());
 				const overlay = document.createElement('div');
 				overlay.className = 'modal upload-history-modal';
@@ -331,6 +334,7 @@
 			}
 
 			async function _confirmAndRecall(batchId, overlay) {
+				if (deps.canUseHistory?.() === false) return;
 				const content = overlay.querySelector('#uh-content');
 				const title = overlay.querySelector('#uh-header-title');
 				const historyListHtml = content.innerHTML;
@@ -901,6 +905,10 @@
 					'<p class="center busy-row" style="justify-content:center"><span class="busy-spinner lg"></span><span>Checking recall permission…</span></p>';
 				try {
 					await refreshCapabilities();
+					if (deps.canUseHistory?.() === false) {
+						overlay.remove();
+						return;
+					}
 					if (!hasCapability('recall-upload')) {
 						content.innerHTML =
 							'<div class="banner error"><strong>Recall permission required.</strong> ' +

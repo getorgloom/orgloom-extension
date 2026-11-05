@@ -95,7 +95,11 @@
 			}
 
 			function _slotAssignmentCardClass(rec) {
-				return _isSlotLockedForCurrentUser(rec) ? ' record-card--slot-locked' : '';
+				// Field requests remain openable for inspection; the modal enforces
+				// assignment restrictions on every field and submission action.
+				return _isSlotLockedForCurrentUser(rec) && rec.slot.kind !== 'fields'
+					? ' record-card--slot-locked'
+					: '';
 			}
 
 			function _slotProgress(rec) {
